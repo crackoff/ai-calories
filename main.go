@@ -101,7 +101,7 @@ func handleBot(bot *tgbotapi.BotAPI, db *sql.DB) {
 				}
 
 				food.UserID = update.Message.From.ID
-				food.Timestamp = update.Message.Time().Unix()
+				food.Timestamp = update.Message.Date
 				err = data.InsertFood(db, food)
 				if err != nil {
 					log.Print(err)

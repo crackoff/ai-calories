@@ -3,7 +3,7 @@ package database
 type Food struct {
 	ID                 int     `json:"id"`
 	UserID             int64   `json:"user_id"`
-	Timestamp          int64   `json:"timestamp"`
+	Timestamp          int     `json:"timestamp"`
 	FoodItem           string  `json:"food_item"`
 	TotalWeight        int     `json:"total_weight"`
 	Calories           int     `json:"calories"`
