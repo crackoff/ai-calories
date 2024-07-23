@@ -4,39 +4,53 @@ import (
 	"ai-calories/ai"
 	data "ai-calories/database"
 	"ai-calories/i18n"
-	"database/sql"
+	"bytes"
 	"fmt"
-	_ "github.com/go-sql-driver/mysql"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/imroc/req"
+	"io"
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 func main() {
 	connStr := os.Getenv("DATABASE_URL")
-	db, err := sql.Open("mysql", connStr)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer func(db *sql.DB) {
-		_ = db.Close()
-	}(db)
-
-	err = data.CreateTableIfNotExists(db)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	db := data.NewDatabase(connStr)
 
 	telegramToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	bot, err := tgbotapi.NewBotAPI(telegramToken)
+
+	aiProvider := os.Getenv("AI_PROVIDER")
+	classifier := ai.NewClassifier(aiProvider)
+
 	if err != nil {
 		log.Fatalln(err)
 	}
-	handleBot(bot, db)
+	handleBot(bot, db, classifier)
 }
 
-func handleBot(bot *tgbotapi.BotAPI, db *sql.DB) {
+func downloadFile(fileURL string) (*bytes.Buffer, error) {
+	resp, err := req.Get(fileURL)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Response().Body)
+
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, resp.Response().Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, nil
+}
+
+func handleBot(bot *tgbotapi.BotAPI, db *data.Database, classifier *ai.Classifier) {
 	bot.Debug = true
 	updateConfig := tgbotapi.NewUpdate(0)
 	updateConfig.Timeout = 60
@@ -44,15 +58,21 @@ func handleBot(bot *tgbotapi.BotAPI, db *sql.DB) {
 	for update := range updates {
 		if update.Message != nil { // If we receive a message
 			lang := update.Message.From.LanguageCode
+
 			if update.Message.IsCommand() {
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, "")
 				switch update.Message.Command() {
 				case "start":
 					msg.Text = i18n.GetString("welcome", lang)
-				case "help":
-					msg.Text = "Send /start to get started."
+				case "timezone":
+					tz, err := db.GetUserTimezone(update.Message.From.ID)
+					loc, err := time.LoadLocation(tz)
+					if err != nil {
+						loc = time.FixedZone("UTC", 0)
+					}
+					msg.Text = fmt.Sprintf(i18n.GetString("timezone", lang), loc)
 				case "total":
-					totals, err := data.GetTodayNutrition(db, update.Message.From.ID, lang)
+					totals, err := db.GetTodayNutrition(update.Message.From.ID, lang)
 					if err != nil {
 						log.Print(err)
 						continue
@@ -61,25 +81,26 @@ func handleBot(bot *tgbotapi.BotAPI, db *sql.DB) {
 					msg.ParseMode = "MarkdownV2"
 				case "dry":
 					dry := strings.Replace(update.Message.Text, "/dry", "", 1)
+					if c, _ := classifier.Classify(dry); c != "food" {
+						continue
+					}
 					if strings.TrimSpace(dry) == "" {
 						msg.Text = "Please provide a food item"
 					}
-					food, err := ai.GetNutritionData(dry)
+					food, err := classifier.GetNutritionData(dry)
 					if err != nil {
 						log.Print(err)
-						_, _ = bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, err.Error()))
 						continue
 					}
-					f := i18n.FormatNutrition(food.Calories, food.TotalFat, food.TotalCarbohydrates, food.Protein, lang)
-					msg.Text = escapeMarkdownV2(fmt.Sprintf("*%s* (%dг.)\n%s", food.FoodItem, food.TotalWeight, f))
+					f := i18n.FormatNutrition(food.Calories, food.Fat, food.Carbohydrates, food.Protein, lang)
+					msg.Text = escapeMarkdownV2(fmt.Sprintf("*%s* (%.0fg.)\n%s", food.FoodItem, food.Weight, f))
 					msg.ParseMode = "MarkdownV2"
 				case "set":
 					msg.Text = "This feature is in development"
 				case "delete":
-					foodItem, err := data.DeleteLastFood(db, update.Message.From.ID)
+					foodItem, err := db.DeleteLastFood(update.Message.From.ID)
 					if err != nil {
 						log.Print(err)
-						_, _ = bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, err.Error()))
 						continue
 					}
 					msg.Text = fmt.Sprintf(i18n.GetString("deleted", lang), foodItem)
@@ -90,30 +111,94 @@ func handleBot(bot *tgbotapi.BotAPI, db *sql.DB) {
 				_, err := bot.Send(msg)
 				if err != nil {
 					log.Print(err)
+					continue
 				}
-			} else {
-				log.Print(update.Message.Text)
-				food, err := ai.GetNutritionData(update.Message.Text)
+			} else if len(update.Message.Photo) > 0 {
+				firstPhoto := update.Message.Photo[0]
+				fileID := firstPhoto.FileID
+				fileInfo, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
 				if err != nil {
-					log.Print(err)
-					_, _ = bot.Send(tgbotapi.NewMessage(update.Message.Chat.ID, err.Error()))
+					log.Println("Error getting file:", err)
 					continue
 				}
 
-				food.UserID = update.Message.From.ID
-				food.Timestamp = update.Message.Date
-				err = data.InsertFood(db, food)
+				fileURL := "https://api.telegram.org/file/bot" + bot.Token + "/" + fileInfo.FilePath
+				img, err := downloadFile(fileURL)
+				if err != nil {
+					log.Println("Error downloading file:", err)
+					continue
+				}
+
+				food, err := classifier.GetGetNutritionDataByImage(img, update.Message.Text)
 				if err != nil {
 					log.Print(err)
 					continue
 				}
-				f := i18n.FormatNutrition(food.Calories, food.TotalFat, food.TotalCarbohydrates, food.Protein, lang)
-				s := fmt.Sprintf(i18n.GetString("added", lang), food.FoodItem, food.TotalWeight, f)
+				food.UserID = update.Message.From.ID
+				food.Timestamp = time.Unix(int64(update.Message.Date), 0)
+				err = db.InsertFood(food)
+				if err != nil {
+					log.Print(err)
+					continue
+				}
+				f := i18n.FormatNutrition(food.Calories, food.Fat, food.Carbohydrates, food.Protein, lang)
+				s := fmt.Sprintf(i18n.GetString("added", lang), food.FoodItem, food.Weight, f)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, escapeMarkdownV2(s))
 				msg.ParseMode = "MarkdownV2"
 				_, err = bot.Send(msg)
 				if err != nil {
 					log.Print(err)
+					continue
+				}
+			} else {
+				log.Print(update.Message.Text)
+				class, _ := classifier.Classify(update.Message.Text)
+				if class == "food" {
+					food, err := classifier.GetNutritionData(update.Message.Text)
+					if err != nil {
+						log.Print(err)
+						continue
+					}
+					food.UserID = update.Message.From.ID
+					food.Timestamp = time.Unix(int64(update.Message.Date), 0)
+					err = db.InsertFood(food)
+					if err != nil {
+						log.Print(err)
+						continue
+					}
+					f := i18n.FormatNutrition(food.Calories, food.Fat, food.Carbohydrates, food.Protein, lang)
+					s := fmt.Sprintf(i18n.GetString("added", lang), food.FoodItem, food.Weight, f)
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, escapeMarkdownV2(s))
+					msg.ParseMode = "MarkdownV2"
+					_, err = bot.Send(msg)
+					if err != nil {
+						log.Print(err)
+						continue
+					}
+				} else if class == "location" {
+					tz, err := classifier.GetTimezone(update.Message.Text)
+					if err != nil {
+						log.Print(err)
+						continue
+					}
+					err = db.SaveUserTimezone(update.Message.From.ID, tz)
+					if err != nil {
+						log.Print(err)
+						continue
+					}
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, fmt.Sprintf(i18n.GetString("tz_updated", lang), tz))
+					_, err = bot.Send(msg)
+					if err != nil {
+						log.Print(err)
+						continue
+					}
+				} else {
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, i18n.GetString("unknown", lang))
+					_, err := bot.Send(msg)
+					if err != nil {
+						log.Print(err)
+						continue
+					}
 				}
 			}
 		}
