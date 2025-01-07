@@ -4,10 +4,11 @@ import (
 	"ai-calories/i18n"
 	"errors"
 	"fmt"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
 	"log"
 	"time"
+
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 )
 
 type Database struct {
@@ -27,6 +28,7 @@ func NewDatabase(dsn string) *Database {
 	if err != nil {
 		log.Fatalln("Failed to migrate:", err)
 	}
+
 	return db
 }
 
@@ -49,7 +51,7 @@ func (db *Database) GetTodayNutrition(userID int64, lang string) (string, error)
 		Scan(&result)
 
 	// Format the results
-	total := i18n.FormatNutrition(result.TotalCalories, result.TotalFat, result.TotalCarbohydrates, result.TotalProtein, lang)
+	total := i18n.FormatNutrition(result.TotalCalories, result.TotalCalories, result.TotalFat, result.TotalCarbohydrates, result.TotalProtein, lang)
 	groups, err := db.getFoodGroups(userID, lang)
 	if err != nil {
 		log.Print(err)
@@ -60,25 +62,22 @@ func (db *Database) GetTodayNutrition(userID int64, lang string) (string, error)
 	return s, nil
 }
 
-func (db *Database) GetStartOfDay(userID int64) (int64, error) {
+func (db *Database) GetStartOfDay(userID int64) (time.Time, error) {
 	var loc *time.Location
 	tz, err := db.GetUserTimezone(userID)
 	if err != nil {
-		loc = time.FixedZone("UTC", 0)
+		tz = "UTC"
 	}
 
 	loc, err = time.LoadLocation(tz)
-	if err != nil {
-		loc = time.FixedZone("UTC", 0)
-	}
 	now := time.Now().In(loc)
-	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	return startOfDay, err
 }
 
 func (db *Database) GetUserTimezone(userID int64) (string, error) {
-	var userTimezone UserTimezone
-	result := db.Where("user_id = ?", userID).First(&userTimezone)
+	var userTimezone UserTimezone = UserTimezone{UserID: userID, Timezone: "UTC"}
+	result := db.Where("user_id = ?", userID).FirstOrCreate(&userTimezone)
 	if result.Error != nil {
 		return "", result.Error
 	}
@@ -131,8 +130,21 @@ func (db *Database) getFoodGroups(userID int64, lang string) (string, error) {
 	return result, nil
 }
 
-func (db *Database) InsertFood(f Food) error {
-	return db.Create(&f).Error
+func (db *Database) InsertFood(f Food) (float64, error) {
+	err := db.Create(&f).Error
+	totalCalories := 0.0
+
+	startOfDay, err := db.GetStartOfDay(f.UserID)
+	if err != nil {
+		return 0, err
+	}
+
+	db.Model(&Food{}).
+		Select("SUM(calories) AS total_calories").
+		Where("user_id = ? AND timestamp >= ?", f.UserID, startOfDay).
+		Scan(&totalCalories)
+
+	return totalCalories, err
 }
 
 func (db *Database) DeleteLastFood(userId int64) (string, error) {

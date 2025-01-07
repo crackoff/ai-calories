@@ -17,6 +17,8 @@ func (c Classifier) GetGetNutritionDataByImage(img *bytes.Buffer, description st
 		return data.Food{}, err
 	}
 
+	result = result + "\n" + description
+
 	return c.GetNutritionData(result)
 }
 

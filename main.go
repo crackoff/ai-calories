@@ -6,16 +6,19 @@ import (
 	"ai-calories/i18n"
 	"bytes"
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/imroc/req"
 	"io"
 	"log"
 	"os"
 	"strings"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/imroc/req"
 )
 
 func main() {
+	// deployment: ssh root@216.238.116.27
+
 	connStr := os.Getenv("DATABASE_URL")
 	db := data.NewDatabase(connStr)
 
@@ -92,7 +95,7 @@ func handleBot(bot *tgbotapi.BotAPI, db *data.Database, classifier *ai.Classifie
 						log.Print(err)
 						continue
 					}
-					f := i18n.FormatNutrition(food.Calories, food.Fat, food.Carbohydrates, food.Protein, lang)
+					f := i18n.FormatNutrition(food.Calories, 0.0, food.Fat, food.Carbohydrates, food.Protein, lang)
 					msg.Text = escapeMarkdownV2(fmt.Sprintf("*%s* (%.0fg.)\n%s", food.FoodItem, food.Weight, f))
 					msg.ParseMode = "MarkdownV2"
 				case "set":
@@ -136,12 +139,12 @@ func handleBot(bot *tgbotapi.BotAPI, db *data.Database, classifier *ai.Classifie
 				}
 				food.UserID = update.Message.From.ID
 				food.Timestamp = time.Unix(int64(update.Message.Date), 0)
-				err = db.InsertFood(food)
+				totalCalories, err := db.InsertFood(food)
 				if err != nil {
 					log.Print(err)
 					continue
 				}
-				f := i18n.FormatNutrition(food.Calories, food.Fat, food.Carbohydrates, food.Protein, lang)
+				f := i18n.FormatNutrition(food.Calories, totalCalories, food.Fat, food.Carbohydrates, food.Protein, lang)
 				s := fmt.Sprintf(i18n.GetString("added", lang), food.FoodItem, food.Weight, f)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, escapeMarkdownV2(s))
 				msg.ParseMode = "MarkdownV2"
@@ -152,7 +155,10 @@ func handleBot(bot *tgbotapi.BotAPI, db *data.Database, classifier *ai.Classifie
 				}
 			} else {
 				log.Print(update.Message.Text)
-				class, _ := classifier.Classify(update.Message.Text)
+				class, err := classifier.Classify(update.Message.Text)
+				if err != nil {
+					log.Print(err)
+				}
 				if class == "food" {
 					food, err := classifier.GetNutritionData(update.Message.Text)
 					if err != nil {
@@ -161,12 +167,12 @@ func handleBot(bot *tgbotapi.BotAPI, db *data.Database, classifier *ai.Classifie
 					}
 					food.UserID = update.Message.From.ID
 					food.Timestamp = time.Unix(int64(update.Message.Date), 0)
-					err = db.InsertFood(food)
+					totalCalories, err := db.InsertFood(food)
 					if err != nil {
 						log.Print(err)
 						continue
 					}
-					f := i18n.FormatNutrition(food.Calories, food.Fat, food.Carbohydrates, food.Protein, lang)
+					f := i18n.FormatNutrition(food.Calories, totalCalories, food.Fat, food.Carbohydrates, food.Protein, lang)
 					s := fmt.Sprintf(i18n.GetString("added", lang), food.FoodItem, food.Weight, f)
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, escapeMarkdownV2(s))
 					msg.ParseMode = "MarkdownV2"
@@ -193,6 +199,7 @@ func handleBot(bot *tgbotapi.BotAPI, db *data.Database, classifier *ai.Classifie
 						continue
 					}
 				} else {
+					log.Printf("[WARNING] classified as %s\n", class)
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, i18n.GetString("unknown", lang))
 					_, err := bot.Send(msg)
 					if err != nil {

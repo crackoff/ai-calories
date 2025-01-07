@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"github.com/imroc/req"
 	"net/http"
+
+	"github.com/imroc/req"
 )
 
 type OpenAI struct {
-	apiKey string
-	model  string
+	apiKey      string
+	model_text  string
+	model_image string
 }
 
 type MessageContent interface{}
@@ -38,18 +40,18 @@ type Message struct {
 	Content []MessageContent `json:"content"`
 }
 
-func NewOpenAI(apiKey string, model string) OpenAI {
-	return OpenAI{apiKey: apiKey, model: model}
+func NewOpenAI(apiKey string, model_text string, model_image string) OpenAI {
+	return OpenAI{apiKey: apiKey, model_text: model_text, model_image: model_image}
 }
 
 func (ai OpenAI) QuerySimple(system string, user string, temperature int) (string, error) {
 	payload := map[string]interface{}{
-		"model": "gpt-4o-mini",
+		"model": ai.model_text,
 		"messages": []interface{}{
-			map[string]string{"role": "system", "content": system},
+			map[string]string{"role": "user", "content": system},
 			map[string]string{"role": "user", "content": user},
 		},
-		"temperature": temperature,
+		//"temperature": temperature,
 	}
 
 	return ai.completion(payload)
@@ -61,7 +63,7 @@ func (ai OpenAI) RecognizeImage(img bytes.Buffer, system string, user string) (s
 	messages := []MessageContent{TextContent{Type: "text", Text: user}, image}
 
 	payload := map[string]interface{}{
-		"model":       "gpt-4o-mini",
+		"model":       ai.model_image,
 		"messages":    []Message{{Role: "system", Content: systemMessages}, {Role: "user", Content: messages}},
 		"max_tokens":  800,
 		"temperature": 0,
@@ -82,7 +84,8 @@ func (ai OpenAI) completion(payload interface{}) (string, error) {
 	}
 
 	if r.Response().StatusCode != http.StatusOK {
-		return "", fmt.Errorf("error: %s", r.Response().Status)
+		resp, _ := r.ToString()
+		return "", fmt.Errorf("error: %s (%s)", r.Response().Status, resp)
 	}
 
 	var result struct {
