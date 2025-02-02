@@ -11,8 +11,6 @@ import (
 )
 
 func main() {
-	// deployment: ssh root@216.238.116.27
-
 	connStr := os.Getenv("DATABASE_URL")
 	db := data.NewDatabase(connStr)
 
