@@ -16,11 +16,11 @@ type AI interface {
 	RecognizeImage(img bytes.Buffer, system string, user string) (string, error)
 }
 
-type Classifier struct {
-	AI
+type Classifier interface {
+	GetAI() AI
 }
 
-func NewClassifier(provider string) *Classifier {
+func NewClassifier(provider string, classifier string) Classifier {
 	var ai AI
 	switch provider {
 	case "openai":
@@ -32,5 +32,13 @@ func NewClassifier(provider string) *Classifier {
 		log.Fatalf("unknown AI provider: %s", provider)
 	}
 
-	return &Classifier{AI: ai}
+	switch classifier {
+	case "food":
+		return FoodClassifier{ai: ai}
+	case "expenses":
+		return ExpensesClassifier{ai: ai}
+	}
+
+	log.Fatalf("unknown classifier: %s", classifier)
+	return nil
 }

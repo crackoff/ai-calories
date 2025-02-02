@@ -32,9 +32,15 @@ go mod download
 4. Set up your environment variables:
 
 ```bash
+export BOT_TYPE="[food|expenses]"
+export MASTER_PASSWORD="your_master_password"
+export AI_MODEL_TEXT="your_ai_model_text"
+export AI_MODEL_IMAGE="your_ai_model_image"
+export AI_PROVIDER="your_ai_provider"
 export DATABASE_URL="your_database_url"
+export OPENAI_TOKEN="your_openai_token"
 export TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
-export PPLX_TOKEN="your_perplexity_token"
+export TWO_STEPS_PROMPT="[0|1]"
 ```
 
 5. Run the application:
