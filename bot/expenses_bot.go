@@ -111,7 +111,10 @@ func (b *ExpensesBot) addItem(db *database.Database, userID int64, userText stri
 		return fmt.Sprintf(i18n.GetString("error_adding", lang), userText)
 	}
 
-	return fmt.Sprintf(i18n.GetString("added_to_category", lang), product.Item, product.Category)
+	spendings, _ := db.GetUserStatisticsForCurrentMonth(userID)
+	total, _ := spendings.Get("🤑 Total")
+
+	return fmt.Sprintf(i18n.GetString("added_to_category", lang), product.Item, product.TotalCost, product.Category, total)
 }
 
 func (b *ExpensesBot) deleteLastItem(db *database.Database, userID int64, lang string) string {

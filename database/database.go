@@ -279,13 +279,14 @@ func (db *Database) DeleteLastItem(userId int64) (string, error) {
 
 func (db *Database) GetUserStatisticsForCurrentMonth(userId int64) (omap.OMap[string, float64], error) {
 	query := `select ifnull(c.category, '🤑 Total'),
-			  	   ifnull(sum(total_cost), 0.0) as total_cost
+			  	     ifnull(sum(total_cost), 0.0) as total_cost
 			from expense_categories c
 			left join expenses p on p.user_id = c.user_id
 				  and instr(c.category, p.category) > 0
 				  and month(from_unixtime(p.timestamp)) = month(now())
-			where c.user_id = ?
+				  and year(from_unixtime(p.timestamp)) = year(now())
 				  and p.deleted_at IS NULL
+			where c.user_id = ?
 			group by c.category with rollup;`
 	rows, err := db.Raw(query, userId).Rows()
 	if err != nil {
