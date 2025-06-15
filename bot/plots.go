@@ -1,12 +1,14 @@
 package bot
 
 import (
+	"ai-calories/helpers"
 	"bytes"
 	"fmt"
-	"github.com/matheusoliveira/go-ordered-map/omap"
-	"github.com/wcharczuk/go-chart"
 	"regexp"
 	"strings"
+
+	"github.com/matheusoliveira/go-ordered-map/omap"
+	"github.com/wcharczuk/go-chart"
 )
 
 func DrawPieChart(values omap.OMap[string, float64]) (bytes.Buffer, error) {
@@ -54,6 +56,15 @@ func DrawBarChart(values omap.OMap[string, float64]) (bytes.Buffer, error) {
 	bar.XAxis.Show = true
 	bar.BarWidth = 60
 	bar.TitleStyle.Show = true
+	bar.YAxis.Range = &helpers.ZeroBasedRange{}
+
+	max := 0.0
+	for _, v := range chartValues {
+		if v.Value > max {
+			max = v.Value
+		}
+	}
+	bar.YAxis.Range.SetMax(max)
 
 	err := bar.Render(chart.PNG, &img)
 	if err != nil {
