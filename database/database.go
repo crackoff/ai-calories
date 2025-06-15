@@ -52,34 +52,20 @@ func (db *Database) AddUser(userID int64, username string) error {
 	return nil
 }
 
-func (db *Database) GetTodayNutrition(userID int64, lang string) (string, error) {
+func (db *Database) GetTodayNutrition(userID int64) (FoodResult, error) {
 	// Prepare the query
 	startOfDay, err := db.GetStartOfDay(userID)
 	if err != nil {
-		return "", err
+		return FoodResult{}, err
 	}
 
-	var result struct {
-		TotalCalories      float64
-		TotalFat           float64
-		TotalCarbohydrates float64
-		TotalProtein       float64
-	}
+	var result FoodResult
 	db.Model(&Food{}).
 		Select("SUM(calories) AS total_calories, SUM(fat) AS total_fat, SUM(carbohydrates) AS total_carbohydrates, SUM(protein) AS total_protein").
 		Where("user_id = ? AND timestamp >= ?", userID, startOfDay).
 		Scan(&result)
 
-	// Format the results
-	total := i18n.FormatNutrition(result.TotalCalories, result.TotalCalories, result.TotalFat, result.TotalCarbohydrates, result.TotalProtein, lang)
-	groups, err := db.getFoodGroups(userID, lang)
-	if err != nil {
-		log.Print(err)
-		return "", err
-	}
-	s := fmt.Sprintf(i18n.GetString("total_today", lang), total, groups)
-
-	return s, nil
+	return result, nil
 }
 
 func (db *Database) GetStartOfDay(userID int64) (time.Time, error) {
@@ -105,7 +91,7 @@ func (db *Database) GetUserTimezone(userID int64) (string, error) {
 	return userTimezone.Timezone, nil
 }
 
-func (db *Database) getFoodGroups(userID int64, lang string) (string, error) {
+func (db *Database) GetFoodGroups(userID int64, lang string) (string, error) {
 	startOfDay, err := db.GetStartOfDay(userID)
 	if err != nil {
 		return "", err

@@ -59,3 +59,10 @@ type ExpenseCategory struct {
 	UserID            int64  `json:"user_id"`
 	Category          string `json:"category"`
 }
+
+type FoodResult struct {
+	TotalCalories      float64
+	TotalFat           float64
+	TotalCarbohydrates float64
+	TotalProtein       float64
+}

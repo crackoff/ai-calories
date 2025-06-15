@@ -75,7 +75,8 @@ func sendMessage(chatID int64, message string, bot *tgbotapi.BotAPI) {
 
 func sendImageMessage(chatID int64, message string, img bytes.Buffer, bot *tgbotapi.BotAPI) {
 	msg := tgbotapi.NewPhoto(chatID, tgbotapi.FileReader{Name: "image.png", Reader: &img})
-	msg.Caption = message
+	msg.Caption = escapeMarkdownV2(message)
+	msg.ParseMode = "MarkdownV2"
 	if _, err := bot.Send(msg); err != nil {
 		log.Println(err)
 	}

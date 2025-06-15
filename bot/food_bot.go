@@ -4,12 +4,14 @@ import (
 	"ai-calories/ai"
 	"ai-calories/database"
 	"ai-calories/i18n"
+	"bytes"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/matheusoliveira/go-ordered-map/omap"
 )
 
 type FoodBot struct {
@@ -39,13 +41,9 @@ func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classif
 					}
 					msg.Text = fmt.Sprintf(i18n.GetString("timezone", lang), loc)
 				case "total":
-					totals, err := db.GetTodayNutrition(update.Message.From.ID, lang)
-					if err != nil {
-						log.Print(err)
-						continue
-					}
-					msg.Text = escapeMarkdownV2(totals)
-					msg.ParseMode = "MarkdownV2"
+					totals, img := b.getTodayTotal(db, update.Message.From.ID, lang)
+					sendImageMessage(update.Message.From.ID, totals, img, bot)
+					continue
 				case "dry":
 					dry := strings.Replace(update.Message.Text, "/dry", "", 1)
 					if c, _ := fc.Classify(dry); c != "food" {
@@ -199,4 +197,33 @@ func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classif
 			}
 		}
 	}
+}
+
+func (b *FoodBot) getTodayTotal(db *database.Database, userID int64, lang string) (string, bytes.Buffer) {
+	result, err := db.GetTodayNutrition(userID)
+	if err != nil {
+		log.Print(err)
+		return "", bytes.Buffer{}
+	}
+
+	// Format the results
+	total := i18n.FormatNutrition(result.TotalCalories, result.TotalCalories, result.TotalFat, result.TotalCarbohydrates, result.TotalProtein, lang)
+	groups, err := db.GetFoodGroups(userID, lang)
+	if err != nil {
+		log.Print(err)
+		return "", bytes.Buffer{}
+	}
+	message := fmt.Sprintf(i18n.GetString("total_today", lang), total, groups)
+
+	stats := omap.New[string, float64]()
+	stats.Put("Fats", result.TotalFat)
+	stats.Put("Carbs", result.TotalCarbohydrates)
+	stats.Put("Proteins", result.TotalProtein)
+	img, err := DrawPieChart(stats)
+	if err != nil {
+		log.Println(err)
+		return "", bytes.Buffer{}
+	}
+
+	return message, img
 }
