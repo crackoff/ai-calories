@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/matheusoliveira/go-ordered-map/omap"
-	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
@@ -18,9 +18,7 @@ type Database struct {
 }
 
 func NewDatabase(dsn string) *Database {
-	conn, err := gorm.Open(mysql.New(mysql.Config{
-		DSN: fmt.Sprintf("%s?charset=utf8mb4&parseTime=True&loc=Local", dsn),
-	}))
+	conn, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
 		log.Fatalln("Failed to connect to database:", err)
 	}
@@ -103,16 +101,21 @@ func (db *Database) GetFoodGroups(userID int64, lang string) (string, error) {
 	}
 	query := `
 		SELECT
-			CASE
-				WHEN HOUR(timestamp) BETWEEN 0 AND 11 THEN ?
-				WHEN HOUR(timestamp) BETWEEN 12 AND 17 THEN ?
-				ELSE ?
-			END as time_of_day,
-			GROUP_CONCAT(food_item SEPARATOR ', ') as food_items
-		FROM foods
-		WHERE user_id = ?
-		  AND timestamp >= ?
-		  AND deleted_at IS NULL
+			time_of_day,
+			STRING_AGG(food_item, ', ') as food_items
+		FROM (
+			SELECT
+				food_item,
+				CASE
+					WHEN EXTRACT(HOUR FROM timestamp) BETWEEN 0 AND 11 THEN ?
+					WHEN EXTRACT(HOUR FROM timestamp) BETWEEN 12 AND 17 THEN ?
+					ELSE ?
+				END as time_of_day
+			FROM foods
+			WHERE user_id = ?
+			  AND timestamp >= ?
+			  AND deleted_at IS NULL
+		) as foods_with_time_of_day
 		GROUP BY time_of_day
 		ORDER BY CASE WHEN time_of_day = ? THEN 1 WHEN time_of_day = ? THEN 2 ELSE 3 END`
 
@@ -264,16 +267,16 @@ func (db *Database) DeleteLastItem(userId int64) (string, error) {
 }
 
 func (db *Database) GetUserStatisticsForCurrentMonth(userId int64) (omap.OMap[string, float64], error) {
-	query := `select ifnull(c.category, '🤑 Total'),
-			  	     ifnull(sum(total_cost), 0.0) as total_cost
+	query := `select coalesce(c.category, '🤑 Total'),
+			  	     coalesce(sum(total_cost), 0.0) as total_cost
 			from expense_categories c
 			left join expenses p on p.user_id = c.user_id
-				  and instr(c.category, p.category) > 0
-				  and month(from_unixtime(p.timestamp)) = month(now())
-				  and year(from_unixtime(p.timestamp)) = year(now())
+				  and position(p.category in c.category) > 0
+				  and extract(month from to_timestamp(p.timestamp)) = extract(month from now())
+				  and extract(year from to_timestamp(p.timestamp)) = extract(year from now())
 				  and p.deleted_at IS NULL
 			where c.user_id = ?
-			group by c.category with rollup;`
+			group by rollup(c.category);`
 	rows, err := db.Raw(query, userId).Rows()
 	if err != nil {
 		return nil, err
@@ -298,17 +301,15 @@ func (db *Database) GetUserStatisticsForCurrentMonth(userId int64) (omap.OMap[st
 
 func (db *Database) GetUserAnnualStats(userId int64) (omap.OMap[string, float64], error) {
 	// Querying spending for the last 1 year
-	query := `with recursive nums as (
-				select 0 as num union all select num + 1 from nums where num < 11
-			), year_behind as (
-				select date_format(date_sub(curdate(), interval num month), '%Y-%m-01') as month
-				from nums
+	query := `with year_behind as (
+				select date_trunc('month', current_date - (n || ' months')::interval)::date as month
+				from generate_series(0, 11) as n
 			)
-			select monthname(y.month) as month
+			select to_char(y.month, 'Month') as month
 				 , coalesce(sum(total_cost), 0) as total
 			from year_behind y
-			left join expenses p on y.month = date_format(from_unixtime(timestamp), '%Y-%m-01')
-				  and timestamp >= unix_timestamp(date_sub(now(), interval 1 year))
+			left join expenses p on y.month = date_trunc('month', to_timestamp(timestamp))::date
+				  and timestamp >= extract(epoch from (now() - interval '1 year'))
 				  and p.user_id = ?
 				  and p.deleted_at IS NULL
 			group by y.month
