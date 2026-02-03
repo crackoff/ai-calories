@@ -61,13 +61,13 @@ func (b *ExpensesBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, cla
 					sendMessage(update.Message.Chat.ID, i18n.GetString("unknown_command", lang), bot)
 				}
 			} else {
-				err := checkAuthorization(db, update.Message.From.ID)
-				if err != nil {
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, i18n.GetString("unauthorized", lang))
-					bot.Send(msg)
-					continue
-				}
-				addedItem := b.addItem(db, update.Message.From.ID, update.Message.Text, update.Message.Date, lang)
+			err := checkAuthorization(db, update.Message.From.ID, update.Message.From.UserName, false)
+			if err != nil {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, i18n.GetString("unauthorized", lang))
+				bot.Send(msg)
+				continue
+			}
+			addedItem := b.addItem(db, update.Message.From.ID, update.Message.Text, update.Message.Date, lang)
 				sendMessage(update.Message.Chat.ID, addedItem, bot)
 			}
 		}

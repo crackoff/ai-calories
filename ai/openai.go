@@ -63,10 +63,8 @@ func (ai OpenAI) RecognizeImage(img bytes.Buffer, system string, user string) (s
 	messages := []MessageContent{TextContent{Type: "text", Text: user}, image}
 
 	payload := map[string]interface{}{
-		"model":       ai.model_image,
-		"messages":    []Message{{Role: "system", Content: systemMessages}, {Role: "user", Content: messages}},
-		"max_tokens":  800,
-		"temperature": 0,
+		"model":    ai.model_image,
+		"messages": []Message{{Role: "system", Content: systemMessages}, {Role: "user", Content: messages}},
 	}
 
 	return ai.completion(payload)

@@ -4,12 +4,14 @@ import (
 	"ai-calories/ai"
 	"ai-calories/database"
 	"bytes"
+	"errors"
 	"io"
 	"log"
 	"strings"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/imroc/req"
+	"gorm.io/gorm"
 )
 
 type Bot interface {
@@ -26,11 +28,26 @@ func NewBot(botType string, masterPassword string) Bot {
 	return nil
 }
 
-func checkAuthorization(db *database.Database, userID int64) error {
+func checkAuthorization(db *database.Database, userID int64, username string, is_member bool) error {
+	if is_member {
+		return nil
+	}
+
 	_, err := db.GetUser(userID)
+	if err == gorm.ErrRecordNotFound {
+		db.AddUser(userID, username)
+	} else if err != nil {
+		return err
+	}
+
+	count, err := db.GetFoodsCount(userID)
 	if err != nil {
 		return err
 	}
+	if count > 10 {
+		return errors.New("too many requests, please join the Tribute channel https://t.me/tribute/app?startapp=sw6x to continue using this bot")
+	}
+
 	return nil
 }
 
