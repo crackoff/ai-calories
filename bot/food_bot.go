@@ -19,12 +19,29 @@ type FoodBot struct {
 	MasterPassword string
 }
 
+// The channel id for Tribute channel
+const channelID int64 = -1002822463295
+
 func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classifier *ai.Classifier) {
 	bot.Debug = true
 	updateConfig := tgbotapi.NewUpdate(0)
 	updateConfig.Timeout = 60
 	updates := bot.GetUpdatesChan(updateConfig)
 	for update := range updates {
+		is_member := false
+		member, _ := bot.GetChatMember(tgbotapi.GetChatMemberConfig{
+			ChatConfigWithUser: tgbotapi.ChatConfigWithUser{
+				ChatID: channelID,
+				UserID: update.Message.From.ID,
+			},
+		})
+		switch member.Status {
+		case "member", "administrator", "creator":
+			is_member = true
+		default:
+			is_member = false
+		}
+
 		if update.Message != nil {
 			lang := update.Message.From.LanguageCode
 			fc := (*classifier).(ai.FoodClassifier)
@@ -57,7 +74,7 @@ func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classif
 						log.Print(err)
 						continue
 					}
-					f := i18n.FormatNutrition(food.Calories, 0.0, food.Fat, food.Carbohydrates, food.Protein, lang)
+					f := i18n.FormatNutrition(food.Calories, 0.0, food.Fat, food.Carbohydrates, food.Protein, food.Weight, lang)
 					msg.Text = escapeMarkdownV2(fmt.Sprintf("*%s* (%.0fg.)\n%s", food.FoodItem, food.Weight, f))
 					msg.ParseMode = "MarkdownV2"
 				case "set":
@@ -89,9 +106,9 @@ func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classif
 					log.Print(err)
 					continue
 				}
-			} else if len(update.Message.Photo) > 0 {
-				err := checkAuthorization(db, update.Message.From.ID)
-				if err != nil {
+		} else if len(update.Message.Photo) > 0 {
+			err := checkAuthorization(db, update.Message.From.ID, update.Message.From.UserName, is_member)
+			if err != nil {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, i18n.GetString("unauthorized", lang))
 					bot.Send(msg)
 					continue
@@ -124,7 +141,7 @@ func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classif
 					log.Print(err)
 					continue
 				}
-				f := i18n.FormatNutrition(food.Calories, totalCalories, food.Fat, food.Carbohydrates, food.Protein, lang)
+				f := i18n.FormatNutrition(food.Calories, totalCalories, food.Fat, food.Carbohydrates, food.Protein, food.Weight, lang)
 				s := fmt.Sprintf(i18n.GetString("added", lang), food.FoodItem, food.Weight, f)
 				msg := tgbotapi.NewMessage(update.Message.Chat.ID, escapeMarkdownV2(s))
 				msg.ParseMode = "MarkdownV2"
@@ -133,15 +150,15 @@ func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classif
 					log.Print(err)
 					continue
 				}
-			} else {
-				err := checkAuthorization(db, update.Message.From.ID)
-				if err != nil {
-					msg := tgbotapi.NewMessage(update.Message.Chat.ID, i18n.GetString("unauthorized", lang))
-					bot.Send(msg)
-					continue
-				}
+		} else {
+			err := checkAuthorization(db, update.Message.From.ID, update.Message.From.UserName, is_member)
+			if err != nil {
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, i18n.GetString("unauthorized", lang))
+				bot.Send(msg)
+				continue
+			}
 
-				log.Print(update.Message.Text)
+			log.Print(update.Message.Text)
 				class, err := fc.Classify(update.Message.Text)
 				if err != nil {
 					log.Print(err)
@@ -159,7 +176,7 @@ func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classif
 						log.Print(err)
 						continue
 					}
-					f := i18n.FormatNutrition(food.Calories, totalCalories, food.Fat, food.Carbohydrates, food.Protein, lang)
+					f := i18n.FormatNutrition(food.Calories, totalCalories, food.Fat, food.Carbohydrates, food.Protein, food.Weight, lang)
 					s := fmt.Sprintf(i18n.GetString("added", lang), food.FoodItem, food.Weight, f)
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, escapeMarkdownV2(s))
 					msg.ParseMode = "MarkdownV2"
@@ -207,7 +224,7 @@ func (b *FoodBot) getTodayTotal(db *database.Database, userID int64, lang string
 	}
 
 	// Format the results
-	total := i18n.FormatNutrition(result.TotalCalories, result.TotalCalories, result.TotalFat, result.TotalCarbohydrates, result.TotalProtein, lang)
+	total := i18n.FormatNutrition(result.TotalCalories, result.TotalCalories, result.TotalFat, result.TotalCarbohydrates, result.TotalProtein, result.TotalWeight, lang)
 	groups, err := db.GetFoodGroups(userID, lang)
 	if err != nil {
 		log.Print(err)

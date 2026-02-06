@@ -65,4 +65,5 @@ type FoodResult struct {
 	TotalFat           float64
 	TotalCarbohydrates float64
 	TotalProtein       float64
+	TotalWeight        float64
 }
