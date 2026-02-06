@@ -60,10 +60,13 @@ func (db *Database) GetTodayNutrition(userID int64) (FoodResult, error) {
 	}
 
 	var result FoodResult
-	db.Model(&Food{}).
-		Select("SUM(calories) AS total_calories, SUM(fat) AS total_fat, SUM(carbohydrates) AS total_carbohydrates, SUM(protein) AS total_protein").
+	err = db.Model(&Food{}).
+		Select("SUM(calories) AS total_calories, SUM(fat) AS total_fat, SUM(carbohydrates) AS total_carbohydrates, SUM(protein) AS total_protein, SUM(weight) AS total_weight").
 		Where("user_id = ? AND timestamp >= ?", userID, startOfDay).
-		Scan(&result)
+		Scan(&result).Error
+	if err != nil {
+		return FoodResult{}, err
+	}
 
 	return result, nil
 }

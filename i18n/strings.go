@@ -2,8 +2,8 @@ package i18n
 
 import "fmt"
 
-func FormatNutrition(totalCalories, todayCalories, totalFat, totalCarbs, totalProtein, totalWeigth float64, lang string) string {
-	return fmt.Sprintf(GetString("format", lang), totalCalories, todayCalories, totalProtein, totalFat, totalCarbs, totalWeigth)
+func FormatNutrition(totalCalories, todayCalories, totalFat, totalCarbs, totalProtein, totalWeight float64, lang string) string {
+	return fmt.Sprintf(GetString("format", lang), totalCalories, todayCalories, totalProtein, totalFat, totalCarbs, totalWeight)
 }
 
 func GetString(key, lang string) string {
@@ -12,7 +12,7 @@ func GetString(key, lang string) string {
 		"welcome_expenses":  "Welcome to the budget calculation bot! Just enter your expenses in any format. The bot can calculate statistics for the month. Keep track of your finances :)",
 		"unauthorized":      "You are not authorized to use this bot.",
 		"calories":          "Calories",
-		"format":            "CAL: *%.0f* (Total: %.0f)\n*Protein:* %.2fg.\n*Fats:* %.2fg.\n*Carbs:* %.2fg.\n*Weigth:* %.2fg.\n",
+		"format":            "CAL: *%.0f* (Total: %.0f)\n*Protein:* %.2fg.\n*Fats:* %.2fg.\n*Carbs:* %.2fg.\n*Weight:* %.2fg.\n",
 		"deleted":           "Deleted: *%s*",
 		"added":             "Added: *%s* (%.0fg.)\n%s",
 		"total_today":       "Total today:\n%s\n%s",
@@ -46,7 +46,7 @@ func GetString(key, lang string) string {
 		"welcome_expenses":  "¡Bienvenido al bot de cálculo de presupuesto! Simplemente ingresa tus gastos en cualquier formato. El bot puede calcular estadísticas para el mes. ¡Mantente al tanto de tus finanzas! :)",
 		"unauthorized":      "No tienes autorización para usar este bot.",
 		"calories":          "Calorías",
-		"format":            "CAL: *%.0f* (Total: %.0f)\n*Proteínas:* %.2fg.\n*Grasas:* %.2fg.\n*Carbohidratos:* %.2fg.\n",
+		"format":            "CAL: *%.0f* (Total: %.0f)\n*Proteínas:* %.2fg.\n*Grasas:* %.2fg.\n*Carbohidratos:* %.2fg.\n*Peso:* %.2fg.\n",
 		"deleted":           "Eliminado: *%s*",
 		"added":             "Añadido: *%s* (%.0fg.)\n%s",
 		"total_today":       "Total hoy:\n%s\n%s",
@@ -80,7 +80,7 @@ func GetString(key, lang string) string {
 		"welcome_expenses":  "Добро пожаловать в бот расчета бюджета! Просто введи свои расходы в любом формате. Бот может считать статистику за месяц. Следи за своими финансами :)",
 		"unauthorized":      "У вас нет доступа к этому боту.",
 		"calories":          "Калории",
-		"format":            "ККАЛ: *%.0f* (Всего: %.0f)\n*Белки:* %.2fг.\n*Жиры:* %.2fг.\n*Углеводы:* %.2fг.\n",
+		"format":            "ККАЛ: *%.0f* (Всего: %.0f)\n*Белки:* %.2fг.\n*Жиры:* %.2fг.\n*Углеводы:* %.2fг.\n*Вес:* %.2fг.\n",
 		"deleted":           "Удалено: *%s*",
 		"added":             "Добавлено: *%s* (%.0fг.)\n%s",
 		"total_today":       "Всего сегодня:\n%s\n%s",
@@ -114,7 +114,7 @@ func GetString(key, lang string) string {
 		"welcome_expenses":  "Ласкаво просимо до бота підрахунку бюджету! Просто введіть свої витрати в будь-якому форматі. Бот може відстежувати статистику за місяць. Слідкуйте за своїми фінансами :)",
 		"unauthorized":      "Ви не маєте доступу до цього бота.",
 		"calories":          "Калорії",
-		"format":            "ККАЛ: *%.0f* (Всього: %.0f)\n*Білки:* %.2fг.\n*Жири:* %.2fг.\n*Вуглеводи:* %.2fг.\n",
+		"format":            "ККАЛ: *%.0f* (Всього: %.0f)\n*Білки:* %.2fг.\n*Жири:* %.2fг.\n*Вуглеводи:* %.2fг.\n*Вага:* %.2fг.\n",
 		"deleted":           "Видалено: *%s*",
 		"added":             "Додано: *%s* (%.0fг.)\n%s",
 		"total_today":       "Всього сьогодні:\n%s\n%s",

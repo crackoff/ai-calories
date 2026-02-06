@@ -19,8 +19,15 @@ type FoodBot struct {
 	MasterPassword string
 }
 
+type todayTotalsStore interface {
+	GetTodayNutrition(int64) (database.FoodResult, error)
+	GetFoodGroups(int64, string) (string, error)
+}
+
 // The channel id for Tribute channel
 const channelID int64 = -1002822463295
+
+var drawPieChartFn = DrawPieChart
 
 func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classifier *ai.Classifier) {
 	bot.Debug = true
@@ -106,9 +113,9 @@ func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classif
 					log.Print(err)
 					continue
 				}
-		} else if len(update.Message.Photo) > 0 {
-			err := checkAuthorization(db, update.Message.From.ID, update.Message.From.UserName, is_member)
-			if err != nil {
+			} else if len(update.Message.Photo) > 0 {
+				err := checkAuthorization(db, update.Message.From.ID, update.Message.From.UserName, is_member)
+				if err != nil {
 					msg := tgbotapi.NewMessage(update.Message.Chat.ID, i18n.GetString("unauthorized", lang))
 					bot.Send(msg)
 					continue
@@ -150,15 +157,15 @@ func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classif
 					log.Print(err)
 					continue
 				}
-		} else {
-			err := checkAuthorization(db, update.Message.From.ID, update.Message.From.UserName, is_member)
-			if err != nil {
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, i18n.GetString("unauthorized", lang))
-				bot.Send(msg)
-				continue
-			}
+			} else {
+				err := checkAuthorization(db, update.Message.From.ID, update.Message.From.UserName, is_member)
+				if err != nil {
+					msg := tgbotapi.NewMessage(update.Message.Chat.ID, i18n.GetString("unauthorized", lang))
+					bot.Send(msg)
+					continue
+				}
 
-			log.Print(update.Message.Text)
+				log.Print(update.Message.Text)
 				class, err := fc.Classify(update.Message.Text)
 				if err != nil {
 					log.Print(err)
@@ -216,7 +223,7 @@ func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classif
 	}
 }
 
-func (b *FoodBot) getTodayTotal(db *database.Database, userID int64, lang string) (string, bytes.Buffer) {
+func (b *FoodBot) getTodayTotal(db todayTotalsStore, userID int64, lang string) (string, bytes.Buffer) {
 	result, err := db.GetTodayNutrition(userID)
 	if err != nil {
 		log.Print(err)
@@ -236,7 +243,7 @@ func (b *FoodBot) getTodayTotal(db *database.Database, userID int64, lang string
 	stats.Put("Fats", result.TotalFat)
 	stats.Put("Carbs", result.TotalCarbohydrates)
 	stats.Put("Proteins", result.TotalProtein)
-	img, err := DrawPieChart(stats)
+	img, err := drawPieChartFn(stats)
 	if err != nil {
 		log.Println(err)
 		return "", bytes.Buffer{}

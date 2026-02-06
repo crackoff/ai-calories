@@ -18,6 +18,12 @@ type Bot interface {
 	HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classifier *ai.Classifier)
 }
 
+type authStore interface {
+	GetUser(int64) (database.User, error)
+	AddUser(int64, string) error
+	GetFoodsCount(int64) (int, error)
+}
+
 func NewBot(botType string, masterPassword string) Bot {
 	switch botType {
 	case "food":
@@ -28,14 +34,16 @@ func NewBot(botType string, masterPassword string) Bot {
 	return nil
 }
 
-func checkAuthorization(db *database.Database, userID int64, username string, is_member bool) error {
+func checkAuthorization(db authStore, userID int64, username string, is_member bool) error {
 	if is_member {
 		return nil
 	}
 
 	_, err := db.GetUser(userID)
 	if err == gorm.ErrRecordNotFound {
-		db.AddUser(userID, username)
+		if err := db.AddUser(userID, username); err != nil {
+			return err
+		}
 	} else if err != nil {
 		return err
 	}
