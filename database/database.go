@@ -179,6 +179,15 @@ func (db *Database) DeleteLastFood(userId int64) (string, error) {
 	return "", errors.New("no food item found for the user")
 }
 
+func (db *Database) GetFoodsCount(userId int64) (int, error) {
+	var count int64
+	err := db.Model(&Food{}).Where("user_id = ?", userId).Count(&count).Error
+	if err != nil {
+		return 0, err
+	}
+	return int(count), nil
+}
+
 func (db *Database) SaveUserTimezone(userId int64, timezone string) error {
 	var userTimezone UserTimezone
 	// First, try to find the record

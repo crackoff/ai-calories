@@ -2,8 +2,8 @@ package i18n
 
 import "fmt"
 
-func FormatNutrition(totalCalories, todayCalories, totalFat, totalCarbs, totalProtein float64, lang string) string {
-	return fmt.Sprintf(GetString("format", lang), totalCalories, todayCalories, totalProtein, totalFat, totalCarbs)
+func FormatNutrition(totalCalories, todayCalories, totalFat, totalCarbs, totalProtein, totalWeigth float64, lang string) string {
+	return fmt.Sprintf(GetString("format", lang), totalCalories, todayCalories, totalProtein, totalFat, totalCarbs, totalWeigth)
 }
 
 func GetString(key, lang string) string {
@@ -12,7 +12,7 @@ func GetString(key, lang string) string {
 		"welcome_expenses":  "Welcome to the budget calculation bot! Just enter your expenses in any format. The bot can calculate statistics for the month. Keep track of your finances :)",
 		"unauthorized":      "You are not authorized to use this bot.",
 		"calories":          "Calories",
-		"format":            "CAL: *%.0f* (Total: %.0f)\n*Protein:* %.2fg.\n*Fats:* %.2fg.\n*Carbs:* %.2fg.\n",
+		"format":            "CAL: *%.0f* (Total: %.0f)\n*Protein:* %.2fg.\n*Fats:* %.2fg.\n*Carbs:* %.2fg.\n*Weigth:* %.2fg.\n",
 		"deleted":           "Deleted: *%s*",
 		"added":             "Added: *%s* (%.0fg.)\n%s",
 		"total_today":       "Total today:\n%s\n%s",
