@@ -29,52 +29,58 @@ func (b *ExpensesBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, cla
 		if update.Message != nil { // If we receive a message
 			log.Print(update.Message.Text)
 			lang := update.Message.From.LanguageCode
+			chatID := update.Message.Chat.ID
+			userID := update.Message.From.ID
 
 			if update.Message.IsCommand() {
 				switch update.Message.Command() {
 				case "start":
-					sendMessage(update.Message.Chat.ID, i18n.GetString("welcome_expenses", lang), bot)
+					sendMessage(chatID, i18n.GetString("welcome_expenses", lang), bot)
 				case "timezone":
-					timezone := b.getTimezone(db, update.Message.From.ID, lang)
-					sendMessage(update.Message.Chat.ID, timezone, bot)
+					timezone := b.getTimezone(db, userID, lang)
+					sendMessage(chatID, timezone, bot)
 				case "delete":
-					deletedItem := b.deleteLastItem(db, update.Message.From.ID, lang)
-					sendMessage(update.Message.Chat.ID, deletedItem, bot)
+					deletedItem := b.deleteLastItem(db, userID, chatID, lang)
+					sendMessage(chatID, deletedItem, bot)
 				case "stats":
-					stats, img := b.getMonthlyStats(db, update.Message.From.ID)
-					sendImageMessage(update.Message.Chat.ID, stats, img, bot)
+					stats, img := b.getMonthlyStats(db, chatID)
+					sendImageMessage(chatID, stats, img, bot)
 				case "annual":
-					stats, img := b.getAnnualStats(db, update.Message.From.ID, lang)
-					sendImageMessage(update.Message.Chat.ID, stats, img, bot)
+					stats, img := b.getAnnualStats(db, chatID, lang)
+					sendImageMessage(chatID, stats, img, bot)
 				case "authorize":
+					if isGroupChat(update.Message) {
+						sendMessage(chatID, i18n.GetString("authorize_private", lang), bot)
+						continue
+					}
 					password := strings.Replace(update.Message.Text, "/authorize ", "", 1)
 					if password != b.MasterPassword {
 						continue
 					}
-					err := db.AddUser(update.Message.From.ID, update.Message.From.UserName)
+					err := db.AddUser(userID, update.Message.From.UserName)
 					if err != nil {
 						log.Print(err)
 						continue
 					}
-					sendMessage(update.Message.Chat.ID, "User authorized", bot)
+					sendMessage(chatID, "User authorized", bot)
 				default:
-					sendMessage(update.Message.Chat.ID, i18n.GetString("unknown_command", lang), bot)
+					sendMessage(chatID, i18n.GetString("unknown_command", lang), bot)
 				}
 			} else {
-			err := checkAuthorization(db, update.Message.From.ID, update.Message.From.UserName, false)
-			if err != nil {
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, i18n.GetString("unauthorized", lang))
-				bot.Send(msg)
-				continue
-			}
-			addedItem := b.addItem(db, update.Message.From.ID, update.Message.Text, update.Message.Date, lang)
-				sendMessage(update.Message.Chat.ID, addedItem, bot)
+				err := checkAuthorization(db, userID, update.Message.From.UserName, false)
+				if err != nil {
+					msg := tgbotapi.NewMessage(chatID, i18n.GetString("unauthorized", lang))
+					bot.Send(msg)
+					continue
+				}
+				addedItem := b.addItem(db, userID, chatID, update.Message.Text, update.Message.Date, lang)
+				sendMessage(chatID, addedItem, bot)
 			}
 		}
 	}
 }
 
-func (b *ExpensesBot) addItem(db *database.Database, userID int64, userText string, timestamp int, lang string) string {
+func (b *ExpensesBot) addItem(db *database.Database, userID int64, chatID int64, userText string, timestamp int, lang string) string {
 	defaults := []string{
 		i18n.GetString("house", lang),
 		i18n.GetString("food", lang),
@@ -85,7 +91,7 @@ func (b *ExpensesBot) addItem(db *database.Database, userID int64, userText stri
 		i18n.GetString("other", lang),
 	}
 
-	categories, err := db.GetAllUserCategories(userID, defaults)
+	categories, err := db.GetAllUserCategories(chatID, defaults)
 	if err != nil {
 		log.Print(err)
 		return i18n.GetString("error_adding", lang)
@@ -103,7 +109,21 @@ func (b *ExpensesBot) addItem(db *database.Database, userID int64, userText stri
 		return fmt.Sprintf(i18n.GetString("error_adding", lang), userText)
 	}
 	product.UserID = userID
+	product.ChatID = chatID
 	product.Timestamp = timestamp
+
+	originalCost := product.TotalCost
+	originalCurrency := product.Currency
+
+	if strings.ToUpper(strings.TrimSpace(product.Currency)) != "USD" && product.Currency != "" {
+		converted, err := ConvertToUSD(product.TotalCost, product.Currency)
+		if err != nil {
+			log.Println(err)
+			return fmt.Sprintf(i18n.GetString("error_conversion", lang), product.Currency)
+		}
+		product.TotalCost = converted
+		product.Currency = "USD"
+	}
 
 	err = db.InsertProduct(product)
 	if err != nil {
@@ -111,14 +131,17 @@ func (b *ExpensesBot) addItem(db *database.Database, userID int64, userText stri
 		return fmt.Sprintf(i18n.GetString("error_adding", lang), userText)
 	}
 
-	spendings, _ := db.GetUserStatisticsForCurrentMonth(userID)
+	spendings, _ := db.GetUserStatisticsForCurrentMonth(chatID)
 	total, _ := spendings.Get("🤑 Total")
 
+	if strings.ToUpper(strings.TrimSpace(originalCurrency)) != "USD" && originalCurrency != "" {
+		return fmt.Sprintf(i18n.GetString("added_to_category_converted", lang), product.Item, originalCost, originalCurrency, product.TotalCost, product.Category, total)
+	}
 	return fmt.Sprintf(i18n.GetString("added_to_category", lang), product.Item, product.TotalCost, product.Category, total)
 }
 
-func (b *ExpensesBot) deleteLastItem(db *database.Database, userID int64, lang string) string {
-	foodItem, err := db.DeleteLastItem(userID)
+func (b *ExpensesBot) deleteLastItem(db *database.Database, userID int64, chatID int64, lang string) string {
+	foodItem, err := db.DeleteLastItem(userID, chatID)
 	if err != nil {
 		log.Println(err)
 		return ""
@@ -126,9 +149,9 @@ func (b *ExpensesBot) deleteLastItem(db *database.Database, userID int64, lang s
 	return fmt.Sprintf(i18n.GetString("deleted", lang), foodItem)
 }
 
-func (b *ExpensesBot) addCategory(db *database.Database, userID int64, category string, lang string) string {
+func (b *ExpensesBot) addCategory(db *database.Database, chatID int64, category string, lang string) string {
 	category = b.Classifier.GetCategory(category)
-	err := db.AddUserCategory(userID, category)
+	err := db.AddUserCategory(chatID, category)
 	if err != nil {
 		log.Print(err)
 		return i18n.GetString("error_category", lang)
@@ -136,9 +159,9 @@ func (b *ExpensesBot) addCategory(db *database.Database, userID int64, category 
 	return fmt.Sprintf(i18n.GetString("category_added", lang), category)
 }
 
-func (b *ExpensesBot) deleteCategory(db *database.Database, userID int64, category string, lang string) string {
+func (b *ExpensesBot) deleteCategory(db *database.Database, chatID int64, category string, lang string) string {
 	category = b.Classifier.GetCategory(category)
-	err := db.DeleteUserCategory(userID, category)
+	err := db.DeleteUserCategory(chatID, category)
 	if err != nil {
 		log.Print(err)
 		return i18n.GetString("error_category", lang)
@@ -173,8 +196,8 @@ func (b *ExpensesBot) setLocation(db *database.Database, userID int64, location 
 	return fmt.Sprintf(i18n.GetString("tz_updated", lang), tz)
 }
 
-func (b *ExpensesBot) getMonthlyStats(db *database.Database, userID int64) (string, bytes.Buffer) {
-	stats, err := db.GetUserStatisticsForCurrentMonth(userID)
+func (b *ExpensesBot) getMonthlyStats(db *database.Database, chatID int64) (string, bytes.Buffer) {
+	stats, err := db.GetUserStatisticsForCurrentMonth(chatID)
 	if err != nil {
 		log.Print(err)
 		return "", bytes.Buffer{}
@@ -194,8 +217,8 @@ func (b *ExpensesBot) getMonthlyStats(db *database.Database, userID int64) (stri
 	return message, img
 }
 
-func (b *ExpensesBot) getAnnualStats(db *database.Database, userID int64, lang string) (string, bytes.Buffer) {
-	stats, err := db.GetUserAnnualStats(userID)
+func (b *ExpensesBot) getAnnualStats(db *database.Database, chatID int64, lang string) (string, bytes.Buffer) {
+	stats, err := db.GetUserAnnualStats(chatID)
 	if err != nil {
 		log.Print(err)
 		return "", bytes.Buffer{}

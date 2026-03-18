@@ -24,8 +24,10 @@ func GetString(key, lang string) string {
 		"tz_updated":        "Timezone updated to %s.",
 		"unknown_command":   "Sorry, I don't know that command.",
 		"error_adding":      "Error adding item %s",
-		"added_to_category": "Added %s ($%.2f) to category %s\nSpent in current month $%.2f",
-		"error_tz_update":   "Error updating timezone",
+		"added_to_category":           "Added %s ($%.2f) to category %s\nSpent in current month $%.2f",
+		"added_to_category_converted": "Added %s (%.2f %s -> $%.2f) to category %s\nSpent in current month $%.2f",
+		"error_conversion":            "Error converting currency %s to USD",
+		"error_tz_update":             "Error updating timezone",
 		"error_category":    "Error processing category",
 		"category_added":    "Category '%s' added",
 		"category_deleted":  "Category '%s' deleted",
@@ -39,6 +41,7 @@ func GetString(key, lang string) string {
 		"health":            "🏥 Health",
 		"bills":             "🧾 Bills",
 		"other":             "👽 Other",
+		"authorize_private": "Please use /authorize in a private chat with the bot.",
 	}
 
 	es := map[string]string{
@@ -58,8 +61,10 @@ func GetString(key, lang string) string {
 		"tz_updated":        "Zona horaria actualizada a %s.",
 		"unknown_command":   "Lo siento, no conozco ese comando.",
 		"error_adding":      "Error al agregar el elemento %s",
-		"added_to_category": "Añadido %s ($%.2f) a la categoría %s\nGastado en el mes actual $%.2f",
-		"error_tz_update":   "Error al actualizar la zona horaria",
+		"added_to_category":           "Añadido %s ($%.2f) a la categoría %s\nGastado en el mes actual $%.2f",
+		"added_to_category_converted": "Añadido %s (%.2f %s -> $%.2f) a la categoría %s\nGastado en el mes actual $%.2f",
+		"error_conversion":            "Error al convertir la moneda %s a USD",
+		"error_tz_update":             "Error al actualizar la zona horaria",
 		"error_category":    "Error al procesar la categoría",
 		"category_added":    "Categoría '%s' añadida",
 		"category_deleted":  "Categoría '%s' eliminada",
@@ -73,6 +78,7 @@ func GetString(key, lang string) string {
 		"health":            "🏥 Salud",
 		"bills":             "🧾 Facturas",
 		"other":             "👽 Otro",
+		"authorize_private": "Por favor, usa /authorize en un chat privado con el bot.",
 	}
 
 	ru := map[string]string{
@@ -92,8 +98,10 @@ func GetString(key, lang string) string {
 		"tz_updated":        "Часовой пояс обновлен на %s.",
 		"unknown_command":   "Извините, я не знаю этот команду.",
 		"error_adding":      "Ошибка добавления элемента %s",
-		"added_to_category": "Добавлено %s ($%.2f) в категорию %s\nПотрачено в текущем месяце $%.2f",
-		"error_tz_update":   "Ошибка обновления часового пояса",
+		"added_to_category":           "Добавлено %s ($%.2f) в категорию %s\nПотрачено в текущем месяце $%.2f",
+		"added_to_category_converted": "Добавлено %s (%.2f %s -> $%.2f) в категорию %s\nПотрачено в текущем месяце $%.2f",
+		"error_conversion":            "Ошибка конвертации валюты %s в USD",
+		"error_tz_update":             "Ошибка обновления часового пояса",
 		"error_category":    "Ошибка обработки категории",
 		"category_added":    "Категория '%s' добавлена",
 		"category_deleted":  "Категория '%s' удалена",
@@ -107,6 +115,7 @@ func GetString(key, lang string) string {
 		"health":            "🏥 Здоровье",
 		"bills":             "🧾 Платежи",
 		"other":             "👽 Другое",
+		"authorize_private": "Пожалуйста, используйте /authorize в личном чате с ботом.",
 	}
 
 	ua := map[string]string{
@@ -126,8 +135,10 @@ func GetString(key, lang string) string {
 		"tz_updated":        "Часовий пояс оновлено на %s.",
 		"unknown_command":   "Вибачте, я не знаю цю команду.",
 		"error_adding":      "Помилка додавання елемента %s",
-		"added_to_category": "Додано %s ($%.2f) в категорію %s\nВитрачено в поточному місяці $%.2f",
-		"error_tz_update":   "Помилка оновлення часового поясу",
+		"added_to_category":           "Додано %s ($%.2f) в категорію %s\nВитрачено в поточному місяці $%.2f",
+		"added_to_category_converted": "Додано %s (%.2f %s -> $%.2f) в категорію %s\nВитрачено в поточному місяці $%.2f",
+		"error_conversion":            "Помилка конвертації валюти %s в USD",
+		"error_tz_update":             "Помилка оновлення часового поясу",
 		"error_category":    "Помилка обробки категорії",
 		"category_added":    "Категорія '%s' додана",
 		"category_deleted":  "Категорія '%s' видалена",
@@ -141,6 +152,7 @@ func GetString(key, lang string) string {
 		"health":            "🏥 Здоров'я",
 		"bills":             "🧾 Платежі",
 		"other":             "👽 Інше",
+		"authorize_private": "Будь ласка, використовуйте /authorize в особистому чаті з ботом.",
 	}
 
 	switch lang {

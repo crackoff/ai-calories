@@ -46,6 +46,7 @@ type Expense struct {
 	gorm.Model
 	ExpenseID int     `json:"expense_id"`
 	UserID    int64   `json:"user_id"`
+	ChatID    int64   `json:"chat_id"`
 	Timestamp int     `json:"timestamp"`
 	Item      string  `json:"item"`
 	TotalCost float64 `json:"total_cost"`
@@ -57,6 +58,7 @@ type ExpenseCategory struct {
 	gorm.Model
 	ExpenseCategoryID int    `json:"expense_category_id"`
 	UserID            int64  `json:"user_id"`
+	ChatID            int64  `json:"chat_id"`
 	Category          string `json:"category"`
 }
 

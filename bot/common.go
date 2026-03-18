@@ -59,6 +59,10 @@ func checkAuthorization(db authStore, userID int64, username string, is_member b
 	return nil
 }
 
+func isGroupChat(msg *tgbotapi.Message) bool {
+	return msg.Chat.Type == "group" || msg.Chat.Type == "supergroup"
+}
+
 func escapeMarkdownV2(text string) string {
 	// Characters to be escaped in MarkdownV2
 	escapeChars := []string{"_", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"}

@@ -20,6 +20,9 @@ func main() {
 	aiProvider := os.Getenv("AI_PROVIDER")
 	botType := os.Getenv("BOT_TYPE")
 	masterPassword := os.Getenv("MASTER_PASSWORD")
+	currencyAPIKey := os.Getenv("CURRENCY_API_KEY")
+	bot.InitCurrencyAPI(currencyAPIKey)
+
 	classifier := ai.NewClassifier(aiProvider, botType)
 	chatBot := bot.NewBot(botType, masterPassword)
 

@@ -11,6 +11,7 @@ require (
 	github.com/imroc/req v0.3.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
+	github.com/kitloong/go-currency-converter-api/v2 v2.0.1 // indirect
 	github.com/matheusoliveira/go-ordered-map v0.2.0 // indirect
 	github.com/technoweenie/multipartstreamer v1.0.1 // indirect
 	github.com/wcharczuk/go-chart v2.0.1+incompatible // indirect

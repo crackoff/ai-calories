@@ -18,6 +18,8 @@ github.com/jinzhu/inflection v1.0.0/go.mod h1:h+uFLlag+Qp1Va5pdKtLDYj+kHp5pxUVkr
 github.com/jinzhu/now v1.1.5 h1:/o9tlHleP7gOFmsnYNz3RGnqzefHA47wQpKrrdTIwXQ=
 github.com/jinzhu/now v1.1.5/go.mod h1:d3SSVoowX0Lcu0IBviAWJpolVfI5UJVZZ7cO71lE/z8=
 github.com/kisielk/sqlstruct v0.0.0-20201105191214-5f3e10d3ab46/go.mod h1:yyMNCyc/Ib3bDTKd379tNMpB/7/H5TjM2Y9QJ5THLbE=
+github.com/kitloong/go-currency-converter-api/v2 v2.0.1 h1:BP3UpC0lRBeNYBER2kc4uI4teHqjTQ8y+q42EmfqTIQ=
+github.com/kitloong/go-currency-converter-api/v2 v2.0.1/go.mod h1:DQLQpLVeeS56sldTfHpaRt8mxazcLu6K6hpMgkNu78Y=
 github.com/matheusoliveira/go-ordered-map v0.2.0 h1:sZrRbKFm2ua0F/WelkdxaCsAi9KlPy7514X/Ga5+Srk=
 github.com/matheusoliveira/go-ordered-map v0.2.0/go.mod h1:cUEgFKuM3PhY1/kNtWI3qRGj/DRTSylD3lhMIpntf/g=
 github.com/technoweenie/multipartstreamer v1.0.1 h1:XRztA5MXiR1TIRHxH2uNxXxaIkKQDeX7m2XsSOlQEnM=

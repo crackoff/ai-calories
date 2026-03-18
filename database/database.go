@@ -31,6 +31,10 @@ func NewDatabase(dsn string) *Database {
 		log.Fatalln("Failed to migrate:", err)
 	}
 
+	// Backfill ChatID for existing private-chat data
+	db.Exec("UPDATE expenses SET chat_id = user_id WHERE chat_id = 0")
+	db.Exec("UPDATE expense_categories SET chat_id = user_id WHERE chat_id = 0")
+
 	return db
 }
 
@@ -206,26 +210,26 @@ func (db *Database) SaveUserTimezone(userId int64, timezone string) error {
 	return err
 }
 
-func (db *Database) GetAllUserCategories(userID int64, defaults []string) ([]ExpenseCategory, error) {
+func (db *Database) GetAllUserCategories(chatID int64, defaults []string) ([]ExpenseCategory, error) {
 	var categories []ExpenseCategory
-	result := db.Find(&categories, "user_id = ?", userID)
+	result := db.Find(&categories, "chat_id = ?", chatID)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 
 	if len(categories) == 0 {
-		// For new users
+		// For new chats (private or group)
 		for _, category := range defaults {
-			_ = db.AddUserCategory(userID, category)
-			categories = append(categories, ExpenseCategory{UserID: userID, Category: category})
+			_ = db.AddUserCategory(chatID, category)
+			categories = append(categories, ExpenseCategory{ChatID: chatID, Category: category})
 		}
 	}
 
 	return categories, nil
 }
 
-func (db *Database) AddUserCategory(userID int64, category string) error {
-	expenseCategory := ExpenseCategory{UserID: userID, Category: category}
+func (db *Database) AddUserCategory(chatID int64, category string) error {
+	expenseCategory := ExpenseCategory{ChatID: chatID, Category: category}
 	err := db.Create(&expenseCategory).Error
 	if errors.Is(err, gorm.ErrDuplicatedKey) {
 		return nil
@@ -237,9 +241,9 @@ func (db *Database) AddUserCategory(userID int64, category string) error {
 	return nil
 }
 
-func (db *Database) DeleteUserCategory(userID int64, category string) error {
+func (db *Database) DeleteUserCategory(chatID int64, category string) error {
 	var cat ExpenseCategory
-	result := db.Find(&cat, "user_id = ? AND category = ?", userID, category)
+	result := db.Find(&cat, "chat_id = ? AND category = ?", chatID, category)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -260,11 +264,15 @@ func (db *Database) InsertProduct(product Expense) error {
 	return nil
 }
 
-func (db *Database) DeleteLastItem(userId int64) (string, error) {
+func (db *Database) DeleteLastItem(userID int64, chatID int64) (string, error) {
 	var lastItem Expense
-	result := db.Order("timestamp DESC").Limit(1).Find(&lastItem, "user_id = ?", userId)
+	result := db.Order("timestamp DESC").Limit(1).Find(&lastItem, "user_id = ? AND chat_id = ?", userID, chatID)
 	if result.Error != nil {
 		return "", result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return "", errors.New("no expense item found for the user")
 	}
 
 	err := db.Delete(&lastItem).Error
@@ -275,18 +283,18 @@ func (db *Database) DeleteLastItem(userId int64) (string, error) {
 	return lastItem.Item, nil
 }
 
-func (db *Database) GetUserStatisticsForCurrentMonth(userId int64) (omap.OMap[string, float64], error) {
+func (db *Database) GetUserStatisticsForCurrentMonth(chatID int64) (omap.OMap[string, float64], error) {
 	query := `select ifnull(c.category, '🤑 Total'),
 			  	     ifnull(sum(total_cost), 0.0) as total_cost
 			from expense_categories c
-			left join expenses p on p.user_id = c.user_id
+			left join expenses p on p.chat_id = c.chat_id
 				  and instr(c.category, p.category) > 0
 				  and month(from_unixtime(p.timestamp)) = month(now())
 				  and year(from_unixtime(p.timestamp)) = year(now())
 				  and p.deleted_at IS NULL
-			where c.user_id = ?
+			where c.chat_id = ?
 			group by c.category with rollup;`
-	rows, err := db.Raw(query, userId).Rows()
+	rows, err := db.Raw(query, chatID).Rows()
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +316,7 @@ func (db *Database) GetUserStatisticsForCurrentMonth(userId int64) (omap.OMap[st
 	return statistics, nil
 }
 
-func (db *Database) GetUserAnnualStats(userId int64) (omap.OMap[string, float64], error) {
+func (db *Database) GetUserAnnualStats(chatID int64) (omap.OMap[string, float64], error) {
 	// Querying spending for the last 1 year
 	query := `with recursive nums as (
 				select 0 as num union all select num + 1 from nums where num < 11
@@ -321,12 +329,12 @@ func (db *Database) GetUserAnnualStats(userId int64) (omap.OMap[string, float64]
 			from year_behind y
 			left join expenses p on y.month = date_format(from_unixtime(timestamp), '%Y-%m-01')
 				  and timestamp >= unix_timestamp(date_sub(now(), interval 1 year))
-				  and p.user_id = ?
+				  and p.chat_id = ?
 				  and p.deleted_at IS NULL
 			group by y.month
 			order by y.month;`
 
-	rows, err := db.Raw(query, userId).Rows()
+	rows, err := db.Raw(query, chatID).Rows()
 	if err != nil {
 		return nil, err
 	}
