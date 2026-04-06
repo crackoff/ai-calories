@@ -32,8 +32,12 @@ func NewDatabase(dsn string) *Database {
 	}
 
 	// Backfill ChatID for existing private-chat data
-	db.Exec("UPDATE expenses SET chat_id = user_id WHERE chat_id = 0")
-	db.Exec("UPDATE expense_categories SET chat_id = user_id WHERE chat_id = 0")
+	if err := db.Exec("UPDATE expenses SET chat_id = user_id WHERE chat_id = 0 OR chat_id IS NULL").Error; err != nil {
+		log.Println("Failed to backfill expenses chat_id:", err)
+	}
+	if err := db.Exec("UPDATE expense_categories SET chat_id = user_id WHERE chat_id = 0 OR chat_id IS NULL").Error; err != nil {
+		log.Println("Failed to backfill expense_categories chat_id:", err)
+	}
 
 	return db
 }
@@ -293,6 +297,7 @@ func (db *Database) GetUserStatisticsForCurrentMonth(chatID int64) (omap.OMap[st
 				  and year(from_unixtime(p.timestamp)) = year(now())
 				  and p.deleted_at IS NULL
 			where c.chat_id = ?
+			  and c.deleted_at IS NULL
 			group by c.category with rollup;`
 	rows, err := db.Raw(query, chatID).Rows()
 	if err != nil {
@@ -354,4 +359,45 @@ func (db *Database) GetUserAnnualStats(chatID int64) (omap.OMap[string, float64]
 	}
 
 	return statistics, nil
+}
+
+func (db *Database) MigrateUserToChat(sourceUserID int64, targetChatID int64) (int64, int64, error) {
+	// Delete default categories from target group
+	if err := db.Where("chat_id = ?", targetChatID).Delete(&ExpenseCategory{}).Error; err != nil {
+		return 0, 0, fmt.Errorf("failed to delete target categories: %w", err)
+	}
+
+	// Copy categories from source user to target chat
+	var srcCategories []ExpenseCategory
+	if err := db.Find(&srcCategories, "chat_id = ?", sourceUserID).Error; err != nil {
+		return 0, 0, fmt.Errorf("failed to read source categories: %w", err)
+	}
+	for _, cat := range srcCategories {
+		newCat := ExpenseCategory{ChatID: targetChatID, Category: cat.Category}
+		if err := db.Create(&newCat).Error; err != nil {
+			log.Printf("failed to copy category %s: %v", cat.Category, err)
+		}
+	}
+
+	// Copy expenses from source user to target chat
+	var srcExpenses []Expense
+	if err := db.Find(&srcExpenses, "chat_id = ?", sourceUserID).Error; err != nil {
+		return 0, 0, fmt.Errorf("failed to read source expenses: %w", err)
+	}
+	for _, exp := range srcExpenses {
+		newExp := Expense{
+			UserID:    exp.UserID,
+			ChatID:    targetChatID,
+			Timestamp: exp.Timestamp,
+			Item:      exp.Item,
+			TotalCost: exp.TotalCost,
+			Currency:  exp.Currency,
+			Category:  exp.Category,
+		}
+		if err := db.Create(&newExp).Error; err != nil {
+			log.Printf("failed to copy expense %s: %v", exp.Item, err)
+		}
+	}
+
+	return int64(len(srcCategories)), int64(len(srcExpenses)), nil
 }

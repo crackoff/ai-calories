@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,6 +49,36 @@ func (b *ExpensesBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, cla
 				case "annual":
 					stats, img := b.getAnnualStats(db, chatID, lang)
 					sendImageMessage(chatID, stats, img, bot)
+				case "categories":
+					result := b.getCategories(db, chatID, lang)
+					sendMessage(chatID, result, bot)
+				case "add_category":
+					arg := strings.TrimSpace(update.Message.CommandArguments())
+					if arg == "" {
+						sendMessage(chatID, "Usage: /add_category <category name>", bot)
+						continue
+					}
+					result := b.addCategory(db, chatID, arg, lang)
+					sendMessage(chatID, result, bot)
+				case "migrate":
+					args := strings.Fields(update.Message.CommandArguments())
+					if len(args) != 2 {
+						sendMessage(chatID, "Usage: /migrate <source_user_id> <target_chat_id>", bot)
+						continue
+					}
+					sourceUserID, err1 := strconv.ParseInt(args[0], 10, 64)
+					targetChatID, err2 := strconv.ParseInt(args[1], 10, 64)
+					if err1 != nil || err2 != nil {
+						sendMessage(chatID, "Invalid user ID or chat ID", bot)
+						continue
+					}
+					catCount, expCount, err := db.MigrateUserToChat(sourceUserID, targetChatID)
+					if err != nil {
+						log.Print(err)
+						sendMessage(chatID, fmt.Sprintf("Migration failed: %v", err), bot)
+						continue
+					}
+					sendMessage(chatID, fmt.Sprintf("Migration complete: copied %d categories and %d expenses", catCount, expCount), bot)
 				case "authorize":
 					if isGroupChat(update.Message) {
 						sendMessage(chatID, i18n.GetString("authorize_private", lang), bot)
@@ -167,6 +198,28 @@ func (b *ExpensesBot) deleteCategory(db *database.Database, chatID int64, catego
 		return i18n.GetString("error_category", lang)
 	}
 	return fmt.Sprintf(i18n.GetString("category_deleted", lang), category)
+}
+
+func (b *ExpensesBot) getCategories(db *database.Database, chatID int64, lang string) string {
+	defaults := []string{
+		i18n.GetString("house", lang),
+		i18n.GetString("food", lang),
+		i18n.GetString("transport", lang),
+		i18n.GetString("entertainment", lang),
+		i18n.GetString("health", lang),
+		i18n.GetString("education", lang),
+		i18n.GetString("other", lang),
+	}
+	categories, err := db.GetAllUserCategories(chatID, defaults)
+	if err != nil {
+		log.Print(err)
+		return i18n.GetString("error_category", lang)
+	}
+	message := ""
+	for _, cat := range categories {
+		message += cat.Category + "\n"
+	}
+	return fmt.Sprintf(i18n.GetString("categories_list", lang), message)
 }
 
 func (b *ExpensesBot) getTimezone(db *database.Database, id int64, lang string) string {

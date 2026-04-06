@@ -6,6 +6,7 @@ import (
 	data "ai-calories/database"
 	"log"
 	"os"
+	"strconv"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -22,6 +23,12 @@ func main() {
 	masterPassword := os.Getenv("MASTER_PASSWORD")
 	currencyAPIKey := os.Getenv("CURRENCY_API_KEY")
 	bot.InitCurrencyAPI(currencyAPIKey)
+
+	if uyuRate := os.Getenv("UYU_RATE"); uyuRate != "" {
+		if rate, err := strconv.ParseFloat(uyuRate, 64); err == nil {
+			bot.SetManualRate("UYU", rate)
+		}
+	}
 
 	classifier := ai.NewClassifier(aiProvider, botType)
 	chatBot := bot.NewBot(botType, masterPassword)
