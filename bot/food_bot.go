@@ -121,9 +121,9 @@ func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classif
 					continue
 				}
 
-				firstPhoto := update.Message.Photo[0]
-				fileID := firstPhoto.FileID
-				fileInfo, err := bot.GetFile(tgbotapi.FileConfig{FileID: fileID})
+				// Telegram sends several sizes; the last entry is the largest.
+				photo := update.Message.Photo[len(update.Message.Photo)-1]
+				fileInfo, err := bot.GetFile(tgbotapi.FileConfig{FileID: photo.FileID})
 				if err != nil {
 					log.Println("Error getting file:", err)
 					continue
@@ -136,7 +136,12 @@ func (b *FoodBot) HandleBot(bot *tgbotapi.BotAPI, db *database.Database, classif
 					continue
 				}
 
-				food, err := fc.GetGetNutritionDataByImage(img, update.Message.Text)
+				// Photo text lives in Caption; Text is empty for photo messages.
+				caption := update.Message.Caption
+				if caption == "" {
+					caption = update.Message.Text
+				}
+				food, err := fc.GetGetNutritionDataByImage(img, caption)
 				if err != nil {
 					log.Print(err)
 					continue

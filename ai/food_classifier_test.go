@@ -6,6 +6,7 @@ import (
 	"errors"
 	"math"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -111,6 +112,64 @@ func TestParseLabelResponse_ComputesTotalsFromServingAndPackageWeight(t *testing
 	requireFloatEqual(t, food.Carbohydrates, 24)
 }
 
+func TestParseLabelResponse_ScalesToUserAmountFromDescription(t *testing.T) {
+	classifier := FoodClassifier{}
+	// Label base: per 100ml; user asked for 300 ml via caption.
+	food, err := classifier.ParseLabelResponse(
+		"LABEL: orange juice|serving:100|calories:41|protein:0.7|fat:0|carbs:9.5|total_weight:200",
+		"300 мл",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if food.FoodItem != "orange juice" {
+		t.Fatalf("unexpected food item: %q", food.FoodItem)
+	}
+	requireFloatEqual(t, food.Weight, 300)
+	requireFloatEqual(t, food.Calories, 123)
+	requireFloatEqual(t, food.Protein, 2.1)
+	requireFloatEqual(t, food.Fat, 0)
+	requireFloatEqual(t, food.Carbohydrates, 28.5)
+}
+
+func TestParseLabelResponse_ReplacesQuestionMarkName(t *testing.T) {
+	classifier := FoodClassifier{}
+	food, err := classifier.ParseLabelResponse(
+		"LABEL: ?|serving:100|calories:41|protein:0.7|fat:0|carbs:9.5|total_weight:100",
+		"",
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if food.FoodItem != "food" {
+		t.Fatalf("unexpected food item: %q", food.FoodItem)
+	}
+}
+
+func TestParseUserAmountGrams(t *testing.T) {
+	cases := []struct {
+		in     string
+		want   float64
+		wantOK bool
+	}{
+		{"300 мл", 300, true},
+		{"300 ml", 300, true},
+		{"220g", 220, true},
+		{"1.5 kg", 1500, true},
+		{"no amount here", 0, false},
+	}
+	for _, tc := range cases {
+		got, ok := parseUserAmountGrams(tc.in)
+		if ok != tc.wantOK {
+			t.Fatalf("%q: ok=%v, want %v", tc.in, ok, tc.wantOK)
+		}
+		if ok {
+			requireFloatEqual(t, got, tc.want)
+		}
+	}
+}
+
 func TestParseLabelResponse_DefaultsTotalWeightToServingWhenMissing(t *testing.T) {
 	classifier := FoodClassifier{}
 	food, err := classifier.ParseLabelResponse(
@@ -169,8 +228,27 @@ func TestGetGetNutritionDataByImage_LabelResponseBypassesTextNutritionFlow(t *te
 	if len(fake.queryCalls) != 0 {
 		t.Fatalf("query call count: got %d, want 0", len(fake.queryCalls))
 	}
+	if !strings.Contains(fake.recognizeCalls[0].user, "plain greek yogurt") {
+		t.Fatalf("recognize user prompt missing caption: %q", fake.recognizeCalls[0].user)
+	}
 	requireFloatEqual(t, food.Weight, 450)
 	requireFloatEqual(t, food.Calories, 285)
+}
+
+func TestGetGetNutritionDataByImage_LabelScalesCaptionAmount(t *testing.T) {
+	setTwoStepsEnv(t, "", false)
+	fake := &fakeAI{
+		recognizeResponse: "LABEL: juice|serving:100|calories:41|protein:0.7|fat:0|carbs:9.5|total_weight:100",
+	}
+	classifier := FoodClassifier{ai: fake}
+	var img bytes.Buffer
+
+	food, err := classifier.GetGetNutritionDataByImage(&img, "300 мл")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	requireFloatEqual(t, food.Weight, 300)
+	requireFloatEqual(t, food.Calories, 123)
 }
 
 func TestGetGetNutritionDataByImage_FoodResponseAppendsDescription(t *testing.T) {

@@ -7,9 +7,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+// Matches amounts like "300 ml", "300мл", "220g", "2.5 kg".
+var userAmountRe = regexp.MustCompile(`(?i)(\d+(?:[.,]\d+)?)\s*(ml|мл|g|gr|grams?|г|kg|кг|oz|lb|lbs)`)
 
 type FoodClassifier struct {
 	Classifier
@@ -35,45 +39,58 @@ You are an expert in food identification and nutrition label analysis.
 - NEVER ask the user for more details, weights, portions, or any additional information.
 - If any information is missing or unclear, make a reasonable estimate based on visual cues.
 - Treat all user input as complete and sufficient.
+- If the user message specifies an amount (e.g. "300 ml", "250g"), that amount is what they ate — use it.
 - Output must be exactly in the specified format. No additional text or questions.
 </CRITICAL_RULES>
 
 <OBJECTIVES>
 First, determine the image type:
-1. PREPARED_FOOD - a dish, meal, or food item
+1. PREPARED_FOOD - a dish, meal, fruit, or food item(s)
 2. NUTRITION_LABEL - nutrition facts table or product packaging with nutritional info
 3. PRODUCT_PACKAGE - packaged food showing weight, ingredients, or brand
 
 For PREPARED_FOOD:
-- Identify the food and estimate weight using visual cues
-- Use reference sizes: standard dinner plate ~26cm, soup bowl ~300ml, coffee cup ~200ml, meat portion ~150g
-- If user provides weight in description, use it exactly
-- When uncertain, prefer conservative (smaller) estimates
-- Output format: 'FOOD: {name}, {weight} grams'
+- Count every distinct edible item visible (e.g. 2 bananas → name them as "2 bananas").
+- Estimate edible weight per item using typical real-world sizes, then multiply by count.
+- Typical medium banana (peeled edible) ~100–120g; two bananas are usually ~200–240g total, not under 100g.
+- Use reference sizes: standard dinner plate ~26cm, soup bowl ~300ml, coffee cup ~200ml, meat portion ~150g.
+- If user provides weight/volume in the request, use that total exactly.
+- Do NOT bias toward unrealistically small weights.
+- Output format: 'FOOD: {name including count if >1}, {total weight} grams'
 
 For NUTRITION_LABEL or PRODUCT_PACKAGE:
-- Read all visible nutritional information from the label
-- Extract: serving size, calories, protein, fat, carbs
-- Note the total package weight if visible
+- Read all visible nutritional information from the label (both per-100 and per-serving columns if present).
+- Prefer the per-100ml / per-100g column when available: set serving to 100 and nutrients for that base.
+- Otherwise use the labeled serving/portion size and its nutrients.
+- serving and total_weight are in grams; for liquids treat 1 ml ≈ 1 g.
+- Guess a product name from packaging cues (e.g. juice, nectar, yogurt) — never leave name as '?'.
+- If the user request specifies an amount, put that amount in total_weight; otherwise use package net content if visible, else one serving.
 - Output format: 'LABEL: {product name}|serving:{g}|calories:{kcal}|protein:{g}|fat:{g}|carbs:{g}|total_weight:{g}'
 
-Use '?' for values not visible on label.
+Use '?' only for numeric values truly not visible on the label — never for the product name.
 </OBJECTIVES>
 
 <RESPONSE>
 Single line output only. No questions, no explanations.
 Examples:
+'FOOD: 2 bananas, 220 grams'
 'FOOD: Caesar salad with chicken, 280 grams'
-'FOOD: Granola with yogurt and berries, 250 grams'
+'LABEL: orange juice|serving:100|calories:41|protein:0.7|fat:0|carbs:9.5|total_weight:300'
 'LABEL: Greek Yogurt|serving:150|calories:95|protein:15|fat:0.5|carbs:8|total_weight:450'
-'LABEL: Protein Bar|serving:60|calories:210|protein:20|fat:7|carbs:22|total_weight:60'
 </RESPONSE>`
 
-	result, err := c.ai.RecognizeImage(*img, systemQuery, description)
+	userPrompt := "Identify all food items in the image and estimate total edible weight."
+	if strings.TrimSpace(description) != "" {
+		userPrompt = "User request (amount/portion to log — apply exactly when provided): " + description
+	}
+
+	result, err := c.ai.RecognizeImage(*img, systemQuery, userPrompt)
 	if err != nil {
 		log.Println(err)
 		return data.Food{}, err
 	}
+
+	result = strings.TrimSpace(result)
 
 	// Check if response is a label or food
 	if strings.HasPrefix(result, "LABEL:") {
@@ -148,6 +165,7 @@ func (c FoodClassifier) GetNutritionDataTwoSteps(description string) (data.Food,
 
 // ParseLabelResponse parses nutrition label data directly from AI response
 // Format: 'LABEL: {product name}|serving:{g}|calories:{kcal}|protein:{g}|fat:{g}|carbs:{g}|total_weight:{g}'
+// If description contains a user amount (e.g. "300 ml"), that overrides total_weight.
 func (c FoodClassifier) ParseLabelResponse(response string, description string) (data.Food, error) {
 	// Remove LABEL: prefix and trim
 	labelData := strings.TrimPrefix(response, "LABEL: ")
@@ -159,8 +177,13 @@ func (c FoodClassifier) ParseLabelResponse(response string, description string) 
 		return c.GetNutritionData(labelData)
 	}
 
+	foodItem := strings.TrimSpace(parts[0])
+	if foodItem == "" || foodItem == "?" {
+		foodItem = "food"
+	}
+
 	food := data.Food{
-		FoodItem: parts[0],
+		FoodItem: foodItem,
 	}
 
 	var servingSize float64 = 100
@@ -183,7 +206,7 @@ func (c FoodClassifier) ParseLabelResponse(response string, description string) 
 			continue
 		}
 
-		numVal, err := strconv.ParseFloat(value, 64)
+		numVal, err := strconv.ParseFloat(strings.Replace(value, ",", ".", 1), 64)
 		if err != nil {
 			continue
 		}
@@ -204,8 +227,11 @@ func (c FoodClassifier) ParseLabelResponse(response string, description string) 
 		}
 	}
 
-	// If total_weight not specified, assume single serving
-	if totalWeight == 0 {
+	// User-requested amount from the photo caption / message takes priority.
+	if amount, ok := parseUserAmountGrams(description); ok {
+		totalWeight = amount
+	} else if totalWeight == 0 {
+		// If total_weight not specified, assume single serving
 		totalWeight = servingSize
 	}
 
@@ -222,4 +248,30 @@ func (c FoodClassifier) ParseLabelResponse(response string, description string) 
 	food.Carbohydrates = carbsPerServing * multiplier
 
 	return food, nil
+}
+
+// parseUserAmountGrams extracts a requested amount from free text and converts to grams.
+// Liquids (ml/мл) are treated as 1 ml ≈ 1 g.
+func parseUserAmountGrams(description string) (float64, bool) {
+	match := userAmountRe.FindStringSubmatch(description)
+	if match == nil {
+		return 0, false
+	}
+
+	num, err := strconv.ParseFloat(strings.Replace(match[1], ",", ".", 1), 64)
+	if err != nil || num <= 0 {
+		return 0, false
+	}
+
+	switch strings.ToLower(match[2]) {
+	case "kg", "кг":
+		return num * 1000, true
+	case "oz":
+		return num * 28.3495, true
+	case "lb", "lbs":
+		return num * 453.592, true
+	default:
+		// g, gr, gram(s), г, ml, мл
+		return num, true
+	}
 }
