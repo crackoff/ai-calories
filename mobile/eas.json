@@ -1,0 +1,31 @@
+{
+  "cli": {
+    "version": ">= 15.0.0"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://CHANGE_ME/api/v1"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://CHANGE_ME/api/v1"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "CHANGE_ME",
+        "ascAppId": "CHANGE_ME",
+        "appleTeamId": "CHANGE_ME"
+      }
+    }
+  }
+}

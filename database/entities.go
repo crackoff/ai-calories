@@ -12,8 +12,12 @@ import (
 
 type User struct {
 	gorm.Model
-	UserID   int64  `json:"user_id"`
-	Username string `json:"username"`
+	UserID       int64   `json:"user_id"`
+	Username     string  `json:"username"`
+	Email        *string `json:"email" gorm:"uniqueIndex;size:255"`
+	Password     *string `json:"password,omitempty" gorm:"size:255"`
+	AuthProvider *string `json:"auth_provider" gorm:"size:10"`
+	Language     string  `json:"language" gorm:"size:5;default:en"`
 }
 
 type UserTimezone struct {

@@ -19,7 +19,7 @@ type Database struct {
 
 func NewDatabase(dsn string) *Database {
 	conn, err := gorm.Open(mysql.New(mysql.Config{
-		DSN: fmt.Sprintf("%s?charset=utf8mb4&parseTime=True&loc=Local", dsn),
+		DSN: fmt.Sprintf("%s?charset=utf8mb4&parseTime=True&loc=UTC", dsn),
 	}))
 	if err != nil {
 		log.Fatalln("Failed to connect to database:", err)

@@ -1,0 +1,53 @@
+services:
+  api:
+    image: debian:trixie-slim
+    volumes:
+      - ./deploy/api-server:/usr/local/bin/api-server:ro
+      - /usr/share/zoneinfo:/usr/share/zoneinfo:ro
+      - /etc/ssl/certs:/etc/ssl/certs:ro
+    entrypoint: ["api-server"]
+    ports:
+      - "8080:8080"
+    env_file: .env
+    restart: unless-stopped
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: nginx:alpine
+    volumes:
+      - ./deploy/web:/usr/share/nginx/html:ro
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    networks:
+      - frontend
+
+  db:
+    image: mysql:lts
+    ports:
+      - "3306:3306"
+    env_file: .env
+    volumes:
+      - mysql_local:/var/lib/mysql
+    restart: unless-stopped
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  backend:
+    driver: bridge
+  frontend:
+    driver: bridge
+
+volumes:
+  mysql_local:

@@ -1,0 +1,6 @@
+FROM alpine:3.19
+RUN apk add --no-cache ca-certificates tzdata
+COPY api-server /usr/local/bin/api-server
+RUN chmod +x /usr/local/bin/api-server
+EXPOSE 8080
+ENTRYPOINT ["api-server"]
